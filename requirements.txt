@@ -1,0 +1,50 @@
+# Python 3.9+. Versions are pinned because numpy 2.x breaks the binary ABI of
+# packages compiled against numpy 1.x - installing these as a set avoids the
+# "numpy.dtype size changed" import error.
+#
+#     python -m venv .venv
+#     .venv\Scripts\activate        # Windows
+#     source .venv/bin/activate     # macOS / Linux
+#     pip install -r requirements.txt
+
+# --- core: needed for preprocessing, EDA, the baseline and LightGBM ---------
+numpy==1.26.4
+pandas==2.3.3
+scipy==1.13.1
+scikit-learn==1.6.1
+lightgbm==4.6.0
+joblib==1.5.3
+
+# --- plotting and notebooks ------------------------------------------------
+matplotlib==3.9.4
+seaborn==0.13.2
+wordcloud==1.9.4
+tabulate==0.9.0
+jupyter==1.1.1
+ipykernel==6.31.0
+tqdm==4.67.1
+
+# --- data download ---------------------------------------------------------
+kagglehub==0.3.6
+
+# --- notebook 04: frozen sentence-transformer embeddings -------------------
+# torch is a ~2 GB download. Skip this block if you only run 01-03.
+torch==2.8.0
+transformers==4.46.3
+sentence-transformers==3.3.1
+
+# --- optional --------------------------------------------------------------
+# LightGBM explanations in notebook 03 (the notebook skips the cell if absent):
+shap==0.49.1
+# The LLM few-shot experiment in src/llm_baseline.py - needs an API key:
+# anthropic>=0.40.0
+# python-dotenv==1.0.1
+
+# --- Colab (notebook 05, DistilBERT) ---------------------------------------
+# Do NOT pip install -r this file in Colab. Colab already ships a working
+# torch/numpy/CUDA combination, and pinning numpy==1.26.4 or torch on top of it
+# is exactly what triggers the ABI error. In Colab install only what is missing:
+#
+#     !pip install -q transformers==4.46.3 accelerate==1.1.1
+#
+# then restart the runtime before importing anything. Notebook 05 does this.
