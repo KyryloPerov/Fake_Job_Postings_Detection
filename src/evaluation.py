@@ -255,12 +255,21 @@ def log_experiment(
     return row
 
 
-def load_experiments(path: Path = config.EXPERIMENTS_CSV) -> pd.DataFrame:
-    """Read the experiment log back, best average precision first."""
+def load_experiments(
+    path: Path = config.EXPERIMENTS_CSV, split: Optional[str] = "val"
+) -> pd.DataFrame:
+    """Read the experiment log back, best average precision first.
+
+    By default only `val` rows are ranked: train metrics are inflated by
+    overfitting and would otherwise float to the top. Pass split=None to rank
+    every logged row regardless of split.
+    """
     path = Path(path)
     if not path.exists():
         return pd.DataFrame(columns=EXPERIMENT_COLUMNS)
     df = pd.read_csv(path)
     if df.empty:
         return df
+    if split is not None:
+        df = df[df["split"] == split]
     return df.sort_values("average_precision", ascending=False).reset_index(drop=True)

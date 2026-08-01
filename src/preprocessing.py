@@ -143,7 +143,8 @@ def encode_categorical_features(
 
     Pass encoder=None to fit (train) or a fitted encoder to transform (val/test).
     min_frequency folds rare industries into one bucket instead of exploding the
-    matrix; handle_unknown="ignore" absorbs categories only seen at test time.
+    matrix; handle_unknown="infrequent_if_exist" routes a category first seen at
+    transform time into that same infrequent bucket rather than an all-zero row.
     """
     values = df[columns].astype(str)
     if encoder is None:

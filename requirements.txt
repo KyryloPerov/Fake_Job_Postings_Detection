@@ -33,9 +33,10 @@ torch==2.8.0
 transformers==4.46.3
 sentence-transformers==3.3.1
 
-# --- optional --------------------------------------------------------------
-# LightGBM explanations in notebook 03 (the notebook skips the cell if absent):
-shap==0.49.1
+# --- optional (install manually if you want these) -------------------------
+# LightGBM explanations in notebook 03 (the notebook skips the cell if absent).
+# shap pulls in heavy transitive dependencies, so keep it opt-in:
+# shap==0.49.1
 # The LLM few-shot experiment in src/llm_baseline.py - needs an API key:
 # anthropic>=0.40.0
 # python-dotenv==1.0.1

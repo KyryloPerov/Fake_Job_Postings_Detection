@@ -159,12 +159,17 @@ def classify_posting(client: Any, row: pd.Series, few_shot_blocks: List[dict]) -
 
     if response.stop_reason == "refusal":
         return {"fraud_probability": float("nan"), "reason": "refused"}
+    if response.stop_reason == "max_tokens":
+        return {"fraud_probability": float("nan"), "reason": "truncated at max_tokens"}
 
     text = next((b.text for b in response.content if b.type == "text"), None)
     if text is None:
         return {"fraud_probability": float("nan"), "reason": "no text block returned"}
 
-    parsed = json.loads(text)
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        return {"fraud_probability": float("nan"), "reason": "unparseable JSON"}
     return {
         "fraud_probability": float(np.clip(parsed["fraud_probability"], 0.0, 1.0)),
         "reason": parsed["reason"],
@@ -191,7 +196,17 @@ if __name__ == "__main__":
     from src import preprocessing
 
     train, val, _ = preprocessing.load_splits()
-    sample = val.sample(n=20, random_state=config.SEED)
+    # Stratified draw: at a ~5% base rate a plain 20-row sample can contain zero
+    # positives, and roc_auc_score then raises "Only one class present". Draw each
+    # class separately so both are guaranteed, concat, and shuffle with a fixed seed.
+    positives = val[val[config.TARGET] == 1]
+    negatives = val[val[config.TARGET] == 0]
+    sample = pd.concat(
+        [
+            positives.sample(n=min(5, len(positives)), random_state=config.SEED),
+            negatives.sample(n=min(15, len(negatives)), random_state=config.SEED),
+        ]
+    ).sample(frac=1.0, random_state=config.SEED)
 
     client = make_client()
     blocks = build_few_shot_blocks(train)

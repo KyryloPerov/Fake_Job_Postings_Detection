@@ -116,7 +116,7 @@ def add_location_features(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     parts = df[config.LOCATION_COLUMN].fillna("").astype(str).str.split(",")
     country = parts.str[0].str.strip().str.upper()
-    df["country"] = country.replace("", "UNKNOWN")
+    df["country"] = country.replace("", "Unknown")
     df["location_depth"] = parts.apply(lambda ps: sum(1 for p in ps if p.strip()))
     return df
 
