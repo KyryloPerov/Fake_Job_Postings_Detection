@@ -100,18 +100,20 @@ sentence-transformers, SHAP, matplotlib/seaborn.
 
 ## 5. Results
 
-> **Placeholder — fill in after running the notebooks.** Numbers come straight from
-> `reports/experiments.csv`; `evaluation.load_experiments()` prints it sorted.
-
-Test split, threshold tuned on validation:
+Test split. Each model's threshold is tuned on validation with **F2** (recall-leaning,
+since a missed scam costs more than a false alarm) and frozen before scoring test, so
+precision/recall/F1 are read at that one operating point. Rows are ranked by AP, the
+primary metric. Full log: [`reports/experiments.csv`](reports/experiments.csv).
 
 | Model | AP (PR-AUC) ↑ | ROC-AUC | Precision | Recall | F1 | Threshold |
 |---|---|---|---|---|---|---|
-| Baseline: most frequent | _TBD_ | 0.500 | 0.00 | 0.00 | 0.00 | – |
-| Baseline: TF-IDF + LogReg | _TBD_ | _TBD_ | _TBD_ | _TBD_ | _TBD_ | _TBD_ |
-| LightGBM + SVD + metadata | _TBD_ | _TBD_ | _TBD_ | _TBD_ | _TBD_ | _TBD_ |
-| DistilBERT fine-tuned | _TBD_ | _TBD_ | _TBD_ | _TBD_ | _TBD_ | _TBD_ |
-| MiniLM frozen + LogReg | _TBD_ | _TBD_ | _TBD_ | _TBD_ | _TBD_ | _TBD_ |
+| LightGBM + SVD + metadata | **0.9211** | 0.9918 | 0.7055 | 0.8984 | 0.7904 | 0.0948 |
+| Baseline: TF-IDF + LogReg | 0.9095 | 0.9912 | 0.7097 | 0.8594 | 0.7774 | 0.4481 |
+| LightGBM + SVD + metadata (Optuna-tuned) | 0.9037 | 0.9883 | 0.7208 | 0.8672 | 0.7872 | 0.1159 |
+| DistilBERT fine-tuned | 0.8877 | 0.9847 | 0.8030 | 0.8281 | 0.8154 | 0.0208 |
+| MiniLM frozen + LightGBM | 0.8360 | 0.9798 | 0.5909 | 0.8125 | 0.6842 | 0.0048 |
+| MiniLM frozen + LogReg | 0.5454 | 0.9466 | 0.4485 | 0.6797 | 0.5404 | 0.7342 |
+| Baseline: most frequent *(trivial reference)* | 0.0485 | 0.500 | 0.00 | 0.00 | 0.00 | – |
 
 Figures land in `reports/figures/`: target imbalance, missingness by class, length
 distributions, top n-grams and word clouds, fraud rate by category, PR/ROC curves,
