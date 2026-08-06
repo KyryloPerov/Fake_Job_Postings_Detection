@@ -38,6 +38,9 @@ threshold selection is a deliberate step here, not left at the default 0.5.
 | Target | `fraudulent` — 1 = fake (~866 rows, **4.8%**), 0 = real |
 | Licence | Public, published for research by the University of the Aegean |
 
+The raw file holds 17,880 rows; removing 281 exact duplicates leaves **17,599**, split
+stratified 70/15/15 into **12,319 / 2,640 / 2,640** (train / val / test).
+
 Two kinds of feature in one table:
 
 * **Text** — `title`, `company_profile`, `description`, `requirements`, `benefits`.
@@ -73,8 +76,9 @@ Reported alongside: **ROC-AUC** (comparability with other published work) and
 1. Split once, stratified, `SEED = 42` → **70% train / 15% val / 15% test**, written
    to `data/processed/`. Every model, local or Colab, reads those exact files.
 2. Train on train.
-3. **Tune the decision threshold on validation** (maximise F1; `tune_threshold(beta=2)`
-   is available when recall matters more). Never leave it at 0.5.
+3. **Tune the decision threshold on validation** with F2 (`tune_threshold(beta=2)`),
+   applied identically to every model — a missed scam costs more than a false alarm, so
+   recall is weighted above precision. Never leave it at 0.5.
 4. Report on test **once**, at that frozen threshold. Test never informs a choice.
 
 Every run appends to [`reports/experiments.csv`](reports/experiments.csv).
@@ -88,7 +92,6 @@ Every run appends to [`reports/experiments.csv`](reports/experiments.csv).
 | 1 | **LightGBM** | TF-IDF → TruncatedSVD (200 dims) + one-hot categoricals + hand-crafted features; `scale_pos_weight` for the imbalance. The only model that sees text *and* metadata together. |
 | 2 | **DistilBERT (fine-tuned)** | `distilbert-base-uncased`, 256 tokens, 3 epochs, class-weighted loss. Needs a GPU → separate Colab notebook. |
 | 3 | **Sentence-Transformers (frozen)** | `all-MiniLM-L6-v2` embeddings, encoder frozen, LogReg / LightGBM head. Cheap middle ground; runs on CPU. |
-| ✳ | **LLM few-shot** *(optional, not graded)* | `src/llm_baseline.py`. Stretch experiment, needs an API key. Not wired into any notebook. |
 
 **Hand-crafted features** (`src/features.py`): missingness flags per field; character
 and word counts per field; CAPS ratio, digit ratio, exclamation/question counts;
@@ -122,15 +125,70 @@ PR-curve comparison across all models on identical test rows.
 
 ## 6. Conclusions
 
-> **Placeholder — write after the runs.** Points worth answering:
->
-> * Which model wins on AP, and is the margin over the TF-IDF baseline worth its cost?
-> * Does metadata beat wording, or the reverse? (LightGBM feature importance answers this.)
-> * Do the transformers justify the compute over TF-IDF on ~18k rows?
-> * At 90% precision, what recall do we get — and is that a shippable product?
-> * **Error analysis:** which fakes slip through? Early expectation is the polished
->   ones that filled in every field — the missingness signal has nothing to bite on.
-> * What would help most next: more data, better features, or an ensemble?
+**LightGBM wins, but the margin over a plain TF-IDF baseline is thin.**
+On the frozen test split LightGBM scores AP 0.9211 against the TF-IDF → LogReg baseline's
+0.9095 — a gain of about 0.012. The engineered metadata and SVD-compressed text barely
+outweigh what the SVD step throws away. The practical reading: TF-IDF → Logistic Regression
+is a strong, cheap baseline a moderation team could ship today; LightGBM buys roughly one
+extra point of average precision for the cost of feature engineering and an SVD step.
+
+**Metadata carries most of the signal, but text decides the remaining errors.**
+LightGBM's feature importance (notebook 03) is dominated by `company_profile_char_count` —
+an ~8× lead over the next feature — followed by `company_profile_is_missing`,
+`has_company_logo` and `digit_ratio`. So the bulk of the discriminative signal lives in
+metadata and missingness, exactly as the EDA predicted. Yet the error analysis complicates
+the story: the fakes the model misses are not separable on metadata from the ones it
+catches — what tells them apart is the wording. Metadata gets you most of the way; the
+residual mistakes are text-separable.
+
+**Transformers did not justify their compute on ~18k rows.**
+Fine-tuned DistilBERT reached AP 0.888 — below the baseline's 0.909 and well below
+LightGBM's 0.921 — and the frozen MiniLM heads landed lower still (0.836 with a LightGBM
+head, 0.545 with a linear one). Because DistilBERT truncates at the same 256 tokens as
+MiniLM, the isolated variable between them is fine-tuning, not context length, and
+fine-tuning bought only +0.05 over the best frozen head without reaching TF-IDF. The
+ceiling here is the data, not the architecture: ~600 positive examples in train is thin
+for a 66M-parameter model. Hyperparameter tuning made the same point from the other side —
+an Optuna sweep of LightGBM (40 trials) scored 0.904 on test, below the untuned 0.921, and
+its most influential knob (`num_leaves`) was already sitting near its optimum. The default
+was close to the ceiling, and a deliberate search confirmed that rather than overturning it.
+
+**Is it shippable? Yes — the real question is which operating point.**
+Threshold choice, not model choice, decides the product. Two points on the LightGBM curve:
+
+| Operating point | Threshold | Precision | Recall | False alarms |
+|---|---|---|---|---|
+| Recall-leaning (F2) | 0.095 | 0.71 | 0.90 | 48 of 2,512 real |
+| Precision-90% | 0.323 | 0.90 | 0.80 | 11 of 2,512 real |
+
+At 90% precision the model still catches four out of five scams while wrongly flagging only
+11 honest employers out of 2,512 — a 0.4% false-alarm rate. (The baseline at the same
+precision recalls 76%, so LightGBM's edge holds at this point too.) Neither point is *the*
+answer: the recall-leaning point suits flag-for-review triage where a human confirms; the
+precision point suits stricter, lower-touch action. Both are defensible because the
+threshold was tuned on validation and frozen before test.
+
+**Which fakes slip through.**
+The false negatives are the polished ones — postings that filled in every field, so the
+missingness signal has nothing to bite on. They read like genuine technical or staffing
+roles and are, on metadata alone, indistinguishable from the fakes the model does catch;
+the one exception is screening questions (54% of missed fakes carry them versus 36% of
+caught fakes). This is the expectation the project started with: the model's blind spot is
+the fraud that took the trouble to look complete.
+
+**Why average precision was the right headline metric.**
+Across all models ROC-AUC stayed in a narrow 0.947–0.992 band while AP ranged from 0.545
+to 0.921 — ROC could barely separate the models, AP could. DistilBERT sharpens the point:
+it has the best F1 in the table (0.815) yet ranks fourth on AP, because F1 is read at a
+single threshold while AP judges the whole ranking. Under 4.8% prevalence, the metric that
+only rewards ranking the rare class well is the one that reflects the real task.
+
+**What would help most next.**
+More positives, not a bigger model. The data ceiling — not architecture — is what capped
+every text-first approach, so labelling more fraudulent examples would move the needle
+further than any change of model. A cheap ensemble is worth a look too: the baseline and
+LightGBM score closely and are cheap to run together. Better features would beat bigger
+models here.
 
 ## 7. Target roles & skills
 
